@@ -1,6 +1,6 @@
 // オフラインでも開けるようにアプリのファイルをキャッシュする。
 // ファイルを更新したら VERSION を上げる。
-const VERSION = 'v5';
+const VERSION = 'v6';
 const CACHE = `study-planner-${VERSION}`;
 const FILES = [
   './', 'index.html', 'css/app.css', 'manifest.webmanifest',
