@@ -254,3 +254,17 @@ dialog::backdrop { background: rgb(0 0 0 / 40%); }
 .tasks.ahead { margin-top: 4px; padding-left: 2px; border-left: 2px solid var(--line); padding-left: 6px; }
 .tasks.ahead .task-label { color: var(--text-2); }
 .plan-day { font-size: 10.5px; color: var(--text-3); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; flex: none; }
+
+/* 誤答アプリとの連携 */
+.mb { font-size: 10.5px; font-weight: 700; border-radius: 4px; padding: 0 4px; flex: none; color: var(--text-2); border: 1px solid var(--line); white-space: nowrap; }
+.mb.ok { color: var(--mark-o); border-color: var(--mark-o); }
+.mb.ng { color: var(--mark-x); border-color: var(--mark-x); }
+.mb.wait { border: 0; padding: 0; font-size: 13px; }
+.waiting { border-color: #e0a100; }
+.wait-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.wait-head h2 { margin: 0 0 6px; }
+.wait-list { list-style: none; margin: 0; padding: 0; }
+.wait-list li { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-top: 1px solid var(--line); font-size: 14px; }
+.wait-list .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--c); flex: none; }
+.timer-btn.auto { display: block; text-align: center; text-decoration: none; color: var(--c); font-size: 12px; }
+.wait-list .grow { flex: 1; }

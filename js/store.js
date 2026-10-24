@@ -16,6 +16,9 @@ function empty() {
     achieved: {},   // { 'YYYY-MM-DD': { subject: true } }
     sessions: [],   // [{ id, subject, start, end, manual, source }]
     active: null,   // { subject, start }
+    // 誤答アプリとの連携（サーバーから取り込むだけ）
+    waiting: [],    // 写真待ち [{ mark_id, item_id, label, subject, marked_on }]
+    mistakes: {},   // 項目ごとの誤答の状況 { itemId: { problems, teichaku, caution } }
   };
 }
 
@@ -74,6 +77,12 @@ export const store = {
     const r = state.marks[itemId]?.pop();
     if (state.marks[itemId] && !state.marks[itemId].length) delete state.marks[itemId];
     commit(r ? [{ t: 'mark_del', id: r.id }] : []);
+  },
+  // 写真待ちを「確認した」にする（1件ずつ・まとめて）
+  dismissWaiting(markIds) {
+    const set = new Set(markIds);
+    state.waiting = state.waiting.filter((w) => !set.has(w.mark_id));
+    commit(markIds.map((id) => ({ t: 'dismiss', id })));
   },
   toggleAchieved(dateKey, subject) {
     const day = (state.achieved[dateKey] ||= {});
@@ -207,6 +216,10 @@ async function onSession(session) {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'achieved' }, onRemote)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'sessions' }, onRemote)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'active_timer' }, onRemote)
+    // 誤答アプリ側の変化（解いた記録・問題の登録・写真待ちの確認）
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'attempts' }, onRemote)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'mistake_links' }, onRemote)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'photo_dismissed' }, onRemote)
     .subscribe();
   await syncNow();
 }
@@ -252,6 +265,7 @@ async function applyOp(op) {
     case 'session_del': r = await db.from('sessions').delete().eq('id', op.id); break;
     case 'timer_set': r = await db.from('active_timer').upsert({ user_id: user.id, subject: op.subject, started_at: iso(op.start) }); break;
     case 'timer_del': r = await db.from('active_timer').delete().eq('user_id', user.id); break;
+    case 'dismiss': r = await db.from('photo_dismissed').upsert({ mark_id: op.id }, { onConflict: 'user_id,mark_id', ignoreDuplicates: true }); break;
     default: return;
   }
   if (r.error) throw r.error;
@@ -259,21 +273,25 @@ async function applyOp(op) {
 
 async function pull() {
   const db = client;
-  const [done, marks, ach, sess, timer] = await Promise.all([
+  const [done, marks, ach, sess, timer, wait, mis] = await Promise.all([
     db.from('task_done').select('task_key, done_on'),
-    db.from('marks').select('id, item_id, mark, marked_on, created_at').order('created_at'),
+    db.from('marks').select('id, item_id, mark, marked_on, created_at, source').order('created_at'),
     db.from('achieved').select('day, subject'),
     db.from('sessions').select('id, subject, started_at, ended_at, manual, source').order('started_at'),
     db.from('active_timer').select('subject, started_at').maybeSingle(),
+    db.from('photo_waiting').select('mark_id, item_id, label, subject, marked_on').order('marked_on'),
+    db.from('item_mistake_status').select('item_id, problems, teichaku, caution'),
   ]);
-  for (const r of [done, marks, ach, sess, timer]) if (r.error) throw r.error;
+  for (const r of [done, marks, ach, sess, timer, wait, mis]) if (r.error) throw r.error;
   if (queue.length) return; // 取得中に新しい変更があれば次の同期で取り込む
   const s = empty();
   for (const r of done.data) s.done[r.task_key] = r.done_on;
-  for (const r of marks.data) (s.marks[r.item_id] ||= []).push({ id: r.id, d: r.marked_on, m: r.mark });
+  for (const r of marks.data) (s.marks[r.item_id] ||= []).push({ id: r.id, d: r.marked_on, m: r.mark, src: r.source });
   for (const r of ach.data) (s.achieved[r.day] ||= {})[r.subject] = true;
   s.sessions = sess.data.map((r) => ({ id: r.id, subject: r.subject, start: Date.parse(r.started_at), end: Date.parse(r.ended_at), manual: r.manual, source: r.source }));
   s.active = timer.data ? { subject: timer.data.subject, start: Date.parse(timer.data.started_at) } : null;
+  s.waiting = wait.data;
+  for (const r of mis.data) s.mistakes[r.item_id] = { problems: r.problems, teichaku: r.teichaku, caution: r.caution };
   state = s;
   persist();
 }
@@ -281,7 +299,7 @@ async function pull() {
 function fullStateOps(s) {
   const ops = [];
   for (const [key, d] of Object.entries(s.done)) ops.push({ t: 'done_set', key, d });
-  for (const [item, arr] of Object.entries(s.marks)) for (const r of arr) ops.push({ t: 'mark_add', item, ...r });
+  for (const [item, arr] of Object.entries(s.marks)) for (const r of arr) if (r.src !== 'mistakes') ops.push({ t: 'mark_add', item, ...r });
   for (const [d, subs] of Object.entries(s.achieved)) for (const subject of Object.keys(subs)) ops.push({ t: 'ach_set', d, subject });
   for (const x of s.sessions) ops.push({ t: 'session_add', ...x });
   if (s.active) ops.push({ t: 'timer_set', subject: s.active.subject, start: s.active.start });

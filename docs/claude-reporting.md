@@ -88,3 +88,10 @@ select label, mark, marked_on from (
 ) last where mark <> 'o';
 ```
 計画の時間配分（週51h）：平日 数学2h・物理1.5h・電験2h・復習0.5h／土 数学4.5h・物理4h・英語2h・電験1h・復習0.5h／日 数学3.5h・物理3h・英語2h・復習0.5h。
+
+
+## 誤答アプリとの連携（参考）
+- `marks` には `source` 列がある（app／mistakes／claude）。Claude が書くときは `source = 'claude'` を付けてよい
+- 写真待ち：`select label, marked_on from public.photo_waiting order by marked_on;`
+- 項目ごとの誤答の状況：`select * from public.item_mistake_status;`（problems・teichaku・caution）
+- 誤答・調べもの問題を登録したら、study-mistakes の `scripts/links_sql.py` の出力で `mistake_links` に対応を入れる

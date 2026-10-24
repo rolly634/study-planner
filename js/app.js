@@ -10,6 +10,25 @@ const $ = (sel, el = document) => el.querySelector(sel);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const MARK = { o: '○', t: '△', x: '×' };
 const MARK_NAME = { o: '自力で正解', t: '迷った・遅い', x: '解けない' };
+const MISTAKES_APP = 'https://rolly634.github.io/study-mistakes-app/';
+
+// 誤答アプリとの連携：写真待ち・項目ごとの誤答の状況
+function waitingOf(s, itemId) { return s.waiting.some((w) => w.item_id === itemId); }
+function mistakeBadge(s, itemId) {
+  const m = s.mistakes[itemId];
+  const parts = [];
+  if (waitingOf(s, itemId)) parts.push('<span class="mb wait" title="写真待ち">📷</span>');
+  if (m) parts.push(`<span class="mb ${m.caution ? 'ng' : m.teichaku === m.problems ? 'ok' : ''}" title="誤答アプリ：${m.problems}問中${m.teichaku}問定着${m.caution ? '・要注意あり' : ''}">${m.caution ? '要注意' : `誤${m.teichaku}/${m.problems}`}</span>`);
+  return parts.join('');
+}
+function renderWaiting(s) {
+  if (!s.waiting.length) return '';
+  return `<section class="card waiting">
+    <div class="wait-head"><h2>📷 写真待ち ${s.waiting.length}件</h2><button class="btn" data-dismiss-all>まとめて確認</button></div>
+    <div class="muted" style="font-size:12.5px;margin:-4px 0 6px">×をつけた問題の写真を Claude のチャットに送ってください。送ると自動で消えます。</div>
+    <ul class="wait-list">${s.waiting.map((w) => `<li class="c-${w.subject}"><span class="dot"></span><span class="grow">${esc(w.label)}</span><span class="muted num">${fmtDay(w.marked_on)}</span><button class="linkbtn" data-dismiss="${esc(w.mark_id)}">確認した</button></li>`).join('')}</ul>
+  </section>`;
+}
 
 const view = {
   tab: 'today',
@@ -128,6 +147,7 @@ function renderToday() {
   const daySessions = s.sessions.filter((x) => todayOf(x.start) === k).sort((a, b) => a.start - b.start);
 
   return `
+    ${k === todayKey() ? renderWaiting(s) : ''}
     <section class="card summary">
       <div>
         <div class="muted" style="font-size:12px">今日の学習時間</div>
@@ -152,12 +172,12 @@ function renderToday() {
       <h2>学習時間の記録</h2>
       ${daySessions.length ? `<ul class="sessions">${daySessions.map((x) => `
         <li class="c-${x.subject}"><span class="dot"></span><span>${SUBJECTS[x.subject].name}</span>
-          <span class="muted num">${x.manual ? '手動追加' : `${hm(x.start)}–${hm(x.end)}`}</span>
+          <span class="muted num">${x.manual ? '手動追加' : `${hm(x.start)}–${hm(x.end)}`}${x.source === 'mistakes' ? '・誤答アプリ' : ''}</span>
           <span class="grow"></span><span class="num">${fmtDur((x.end - x.start) / 3600000)}</span>
           <button class="linkbtn" data-del-session="${x.id}" aria-label="削除">削除</button></li>`).join('')}</ul>`
-        : '<div class="muted" style="font-size:13px">まだ記録はありません。各科目の「開始」で計測できます。</div>'}
+        : '<div class="muted" style="font-size:13px">まだ記録はありません。各科目の「開始」で計測できます（復習は誤答アプリが自動で記録します）。</div>'}
       <form class="inline-form" id="manualForm">
-        <select name="subject">${SUBJECT_ORDER.map((x) => `<option value="${x}">${SUBJECTS[x].name}</option>`).join('')}</select>
+        <select name="subject">${SUBJECT_ORDER.filter((x) => x !== 'review').map((x) => `<option value="${x}">${SUBJECTS[x].name}</option>`).join('')}</select>
         <input name="minutes" type="number" inputmode="numeric" min="1" max="720" placeholder="分" required>
         <button class="btn" type="submit">時間を追加</button>
       </form>
@@ -174,7 +194,7 @@ function renderRow(subj, k, s, planH, tasks, carry, ahead, actH, range, achieved
     const it = ITEMS[t.id], m = lastMark(s, t.id);
     return `<li class="${done ? 'done' : ''}"><button class="chk ${done ? 'on' : ''}" data-chk="${esc(t.key)}" aria-label="完了">✓</button>
       <button class="task-label" data-item="${t.id}" data-key="${esc(t.key)}">${esc(it.label)}${t.round > 1 ? ' <span class="muted">(2周目)</span>' : ''}</button>
-      ${m ? `<span class="mk ${m}">${MARK[m]}</span>` : ''}${t.planned ? `<span class="plan-day">${'日月火水木金土'[fromKey(t.planned).getDay()]}</span>` : ''}</li>`;
+      ${mistakeBadge(s, t.id)}${m ? `<span class="mk ${m}">${MARK[m]}</span>` : ''}${t.planned ? `<span class="plan-day">${'日月火水木金土'[fromKey(t.planned).getDay()]}</span>` : ''}</li>`;
   };
   const aheadOpen = view.aheadOpen.has(subj);
   const aheadLeft = ahead.filter((t) => !s.done[t.key]).length;
@@ -201,7 +221,8 @@ function renderRow(subj, k, s, planH, tasks, carry, ahead, actH, range, achieved
       <div class="act">
         <div class="time num"><b data-live-subj="${subj}">${fmtDur(actH)}</b> / ${planH ? fmtH(planH) : '—'}</div>
         <div class="bar subj"><i data-live-subjbar="${subj}" style="width:${pct(actH, planH)}%"></i></div>
-        ${isToday ? `<button class="timer-btn ${running ? 'running' : ''}" data-timer="${subj}">
+        ${isToday && subj === 'review' ? `<a class="timer-btn auto" href="${MISTAKES_APP}" target="_blank" rel="noopener">誤答アプリで自動記録 ↗</a>`
+          : isToday ? `<button class="timer-btn ${running ? 'running' : ''}" data-timer="${subj}">
           ${running ? `■ <span class="num" data-live-clock>${fmtClock(Date.now() - s.active.start)}</span>` : '▶ 開始'}</button>` : ''}
         <div class="stat-line">
           ${all.length ? `<span>完了 ${doneN}/${all.length}</span>` : ''}
@@ -343,7 +364,11 @@ function renderReview() {
   for (const r of list) counts[r.it.subject] = (counts[r.it.subject] || 0) + 1;
   const f = view.reviewFilter;
   const shown = list.filter((r) => f === 'all' || r.it.subject === f);
+  const caution = Object.entries(s.mistakes).filter(([id, m]) => m.caution && ITEMS[id]).map(([id]) => ITEMS[id]);
   return `
+    ${renderWaiting(s)}
+    ${caution.length ? `<section class="card"><h2>誤答アプリで要注意（2回続けて解けなかった）</h2><ul class="rv">${caution.map((it) => `
+      <li class="c-${it.subject}"><span class="mb ng">要注意</span><button class="lbl" data-item="${it.id}">${esc(it.label)}<small>${esc(BOOKS[it.book].name)}・${esc(it.chapter)}</small></button></li>`).join('')}</ul></section>` : ''}
     <div class="chips">
       <button class="chip ${f === 'all' ? 'on' : ''}" data-filter="all">すべて ${list.length}</button>
       ${SUBJECT_ORDER.filter((x) => counts[x]).map((x) => `<button class="chip ${f === x ? 'on' : ''}" data-filter="${x}">${SUBJECTS[x].name} ${counts[x]}</button>`).join('')}
@@ -353,7 +378,7 @@ function renderReview() {
       ${shown.length ? `<ul class="rv">${shown.map((r) => `
         <li class="c-${r.it.subject}"><span class="mk ${r.last.m}">${MARK[r.last.m]}</span>
           <button class="lbl" data-item="${r.id}">${esc(r.it.label)}<small>${esc(BOOKS[r.it.book].name)}・${esc(r.it.chapter)}・最終 ${fmtDay(r.last.d)}</small></button>
-          <span class="hist">${r.arr.map((x) => `<span class="mk ${x.m}" title="${fmtDay(x.d)}">${MARK[x.m]}</span>`).join('')}</span></li>`).join('')}</ul>`
+          ${mistakeBadge(s, r.id)}<span class="hist">${r.arr.map((x) => `<span class="mk ${x.m}" title="${fmtDay(x.d)}${x.src === 'mistakes' ? '（誤答アプリで定着）' : ''}">${MARK[x.m]}</span>`).join('')}</span></li>`).join('')}</ul>`
         : '<div class="muted" style="font-size:14px">△・×の問題はまだありません。今日の課題の問題名をタップすると○△×を記録できます。</div>'}
     </section>`;
 }
@@ -440,7 +465,8 @@ function renderMarkDlg() {
     <div class="markbtns">
       ${['o', 't', 'x'].map((m) => `<button class="${m}" data-mark="${m}">${MARK[m]}<small>${MARK_NAME[m]}</small></button>`).join('')}
     </div>
-    <div class="histlist">${hist.length ? `これまで：${hist.map((h, i) => `${i + 1}回目 ${fmtDay(h.d)} <span class="mk ${h.m}">${MARK[h.m]}</span>`).join('　')}` : 'まだ記録はありません'}</div>
+    <div class="histlist">${hist.length ? `これまで：${hist.map((h, i) => `${i + 1}回目 ${fmtDay(h.d)} <span class="mk ${h.m}">${MARK[h.m]}</span>${h.src === 'mistakes' ? '<small>（誤答アプリで定着）</small>' : ''}`).join('　')}` : 'まだ記録はありません'}</div>
+    ${s.mistakes[itemId] || waitingOf(s, itemId) ? `<div class="histlist">誤答アプリ：${s.mistakes[itemId] ? `${s.mistakes[itemId].problems}問中 ${s.mistakes[itemId].teichaku}問定着${s.mistakes[itemId].caution ? '・<b style="color:var(--mark-x)">要注意あり</b>' : ''}` : ''}${waitingOf(s, itemId) ? '　📷 写真待ち' : ''}　<a href="${MISTAKES_APP}" target="_blank" rel="noopener">開く ↗</a></div>` : ''}
     <div class="row-btns">
       ${hist.length ? '<button class="btn" data-unmark>最後の記録を取り消す</button>' : '<span></span>'}
       <span>
@@ -476,6 +502,8 @@ document.addEventListener('click', (e) => {
   if ('stop' in ds) { store.stopTimer(); return; }
   if (ds.delSession) { if (confirm('この記録を削除しますか？')) store.removeSession(ds.delSession); return; }
   if (ds.filter) { view.reviewFilter = ds.filter; render(); return; }
+  if (ds.dismiss) { store.dismissWaiting([ds.dismiss]); return; }
+  if ('dismissAll' in ds) { store.dismissWaiting(store.get().waiting.map((w) => w.mark_id)); return; }
   if (ds.ahead) { if (view.aheadOpen.has(ds.ahead)) view.aheadOpen.delete(ds.ahead); else view.aheadOpen.add(ds.ahead); render(); return; }
   if (ds.themeSet) { try { localStorage.setItem('study-planner:theme', ds.themeSet); } catch {} applyTheme(ds.themeSet); render(); return; }
   if ('export' in ds) { download(); return; }
