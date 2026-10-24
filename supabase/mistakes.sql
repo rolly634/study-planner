@@ -164,3 +164,14 @@ alter publication supabase_realtime add table public.mistake_links, public.attem
 --   sent_at timestamptz not null default now(), done_at timestamptz, created_at timestamptz not null default now()
 -- );
 -- RLS：本人だけ select・insert、未対応（status='new'）だけ delete
+
+-- v0.7.0（2026-10-25）：問題・ノート・図・写真も Supabase に置く（誤答アプリは GitHub を読まない）
+-- 書くのは Edge Function sync-mistakes（ソースは非公開リポジトリ study-mistakes の supabase/functions/）。
+-- そのリポジトリへの push ごとに GitHub Actions が OIDC で認証して呼ぶ。mistake_links もそこで作り直す。
+-- create table public.mistake_content (
+--   user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+--   id text not null, kind text not null,              -- problem／note（figure・svg 列は使わない）
+--   data jsonb, svg text, hash text not null, updated_at timestamptz not null default now(),
+--   primary key (user_id, id)
+-- );  RLS：本人だけ select
+-- storage バケット mistakes（非公開）：figures/*.svg、originals/*.jpg。本人だけ select
