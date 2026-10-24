@@ -247,3 +247,10 @@ dialog::backdrop { background: rgb(0 0 0 / 40%); }
 
 .auth-form { display: grid; gap: 8px; }
 .auth-form input { border: 1px solid var(--line); border-radius: 8px; background: var(--surface); padding: 10px; font-size: 16px; width: 100%; }
+
+/* 先取り */
+.ahead-toggle { margin-top: 8px; border: 1px dashed var(--line); background: transparent; border-radius: 8px; padding: 5px 8px; font-size: 12px; color: var(--text-2); width: 100%; text-align: left; display: flex; align-items: center; }
+.ahead-toggle .chev { margin-left: auto; }
+.tasks.ahead { margin-top: 4px; padding-left: 2px; border-left: 2px solid var(--line); padding-left: 6px; }
+.tasks.ahead .task-label { color: var(--text-2); }
+.plan-day { font-size: 10.5px; color: var(--text-3); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; flex: none; }

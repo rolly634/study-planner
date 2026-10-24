@@ -1,7 +1,7 @@
 import { SUBJECTS, SUBJECT_ORDER, ITEMS, BOOKS } from './catalog.js';
 import {
   START, END, todayKey, addDays, diffDays, fmtDay, periodOf, periodByKey, PERIOD_KEYS, daysOfPeriod,
-  plannedHours, dayTasks, earlierItems, periodItems, rangesOf, sumHours, fromKey,
+  plannedHours, dayTasks, aheadItems, earlierItems, periodItems, rangesOf, sumHours, fromKey,
 } from './plan.js';
 import { store, hoursByDay, lastMark, sync, initSync, syncNow, auth } from './store.js';
 import { pickTip } from './tips.js';
@@ -17,6 +17,7 @@ const view = {
   followToday: true,
   week: periodOf(todayKey())?.key ?? 1,
   reviewFilter: 'all',
+  aheadOpen: new Set(),   // 先取りを開いている科目
 };
 
 // ── 書式 ──
@@ -98,7 +99,7 @@ function renderToday() {
   if (p.key === 'EXAM1' || p.key === 'EXAM2') {
     return `<div class="card notice"><div style="font-size:28px">🎯</div><b>${esc(p.title)}</b><br>今日は本番です。これまでの積み重ねを信じて。</div>`;
   }
-  const hrs = plannedHours(k), tasks = dayTasks(k);
+  const hrs = plannedHours(k), tasks = dayTasks(k, s.done), ahead = aheadItems(k, s.done);
   const actual = hoursByDay(s)[k] || {};
   const carry = {};
   for (const t of earlierItems(k)) if (!s.done[t.key]) (carry[t.subject] ||= []).push(t);
@@ -122,7 +123,7 @@ function renderToday() {
   const rtip = pickTip('review', [''], seed);
   if (rtip && tips.length < 2) tips.push({ subj: 'review', tip: rtip });
 
-  const rows = subjects.map((subj) => renderRow(subj, k, s, hrs[subj], tasks[subj], carry[subj] || [], actual[subj] || 0, ranges[subj], !!achieved[subj])).join('');
+  const rows = subjects.map((subj) => renderRow(subj, k, s, hrs[subj], tasks[subj], carry[subj] || [], ahead[subj] || [], actual[subj] || 0, ranges[subj], !!achieved[subj])).join('');
 
   const daySessions = s.sessions.filter((x) => todayOf(x.start) === k).sort((a, b) => a.start - b.start);
 
@@ -163,7 +164,7 @@ function renderToday() {
     </section>`;
 }
 
-function renderRow(subj, k, s, planH, tasks, carry, actH, range, achieved) {
+function renderRow(subj, k, s, planH, tasks, carry, ahead, actH, range, achieved) {
   const li = (t) => {
     const done = !!s.done[t.key];
     if (t.custom) {
@@ -173,8 +174,11 @@ function renderRow(subj, k, s, planH, tasks, carry, actH, range, achieved) {
     const it = ITEMS[t.id], m = lastMark(s, t.id);
     return `<li class="${done ? 'done' : ''}"><button class="chk ${done ? 'on' : ''}" data-chk="${esc(t.key)}" aria-label="完了">✓</button>
       <button class="task-label" data-item="${t.id}" data-key="${esc(t.key)}">${esc(it.label)}${t.round > 1 ? ' <span class="muted">(2周目)</span>' : ''}</button>
-      ${m ? `<span class="mk ${m}">${MARK[m]}</span>` : ''}</li>`;
+      ${m ? `<span class="mk ${m}">${MARK[m]}</span>` : ''}${t.planned ? `<span class="plan-day">${'日月火水木金土'[fromKey(t.planned).getDay()]}</span>` : ''}</li>`;
   };
+  const aheadOpen = view.aheadOpen.has(subj);
+  const aheadLeft = ahead.filter((t) => !s.done[t.key]).length;
+  const aheadDone = ahead.length - aheadLeft;
   const all = [...tasks, ...carry];
   const doneN = all.filter((t) => s.done[t.key]).length;
   const marksToday = { o: 0, t: 0, x: 0 };
@@ -191,6 +195,8 @@ function renderRow(subj, k, s, planH, tasks, carry, actH, range, achieved) {
         ${range ? `<div class="range">${esc(range)}</div>` : ''}
         <ul class="tasks">${tasks.map(li).join('')}</ul>
         ${carry.length ? `<div class="carry-h">持ち越し（${carry.length}）</div><ul class="tasks">${carry.map(li).join('')}</ul>` : ''}
+        ${ahead.length ? `<button class="ahead-toggle" data-ahead="${subj}" aria-expanded="${aheadOpen}">先取り（残り${aheadLeft}${aheadDone ? `・済${aheadDone}` : ''}）<span class="chev">${aheadOpen ? '▾' : '▸'}</span></button>
+          ${aheadOpen ? `<ul class="tasks ahead">${ahead.map(li).join('')}</ul>` : ''}` : ''}
       </div>
       <div class="act">
         <div class="time num"><b data-live-subj="${subj}">${fmtDur(actH)}</b> / ${planH ? fmtH(planH) : '—'}</div>
@@ -470,6 +476,7 @@ document.addEventListener('click', (e) => {
   if ('stop' in ds) { store.stopTimer(); return; }
   if (ds.delSession) { if (confirm('この記録を削除しますか？')) store.removeSession(ds.delSession); return; }
   if (ds.filter) { view.reviewFilter = ds.filter; render(); return; }
+  if (ds.ahead) { if (view.aheadOpen.has(ds.ahead)) view.aheadOpen.delete(ds.ahead); else view.aheadOpen.add(ds.ahead); render(); return; }
   if (ds.themeSet) { try { localStorage.setItem('study-planner:theme', ds.themeSet); } catch {} applyTheme(ds.themeSet); render(); return; }
   if ('export' in ds) { download(); return; }
   if ('sync' in ds) { syncNow(); return; }

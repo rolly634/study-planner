@@ -168,7 +168,7 @@ export function periodAllocation(p) {
   const result = Object.fromEntries(days.map((d) => [d, []]));
   const put = (list, weights, spanning = false) => {
     allocate(list, weights, spanning).forEach((arr, i) => {
-      for (const it of arr) result[days[i]].push({ key: `${it.id}#${it.round}`, id: it.id, round: it.round, subject: it.subject });
+      for (const it of arr) result[days[i]].push({ key: `${it.id}#${it.round}`, id: it.id, round: it.round, subject: it.subject, stream: it.stream, spanning });
     });
   };
   // 数学：基礎問は全日、合格るは2〜3日後（月〜金）
@@ -190,13 +190,55 @@ export function periodAllocation(p) {
   return result;
 }
 
-// その日の課題（今日の割り当て＋教材以外の課題）
-export function dayTasks(k) {
+// 先取りを反映した割り当て（指定日 k 時点）
+// ・k より前に完了した項目（先取り分）を、k 以降の予定から外す
+// ・残りは教材ごとに順番どおり前へ詰める。各日の問題数は元の予定と同じなので、週の終わりが空く
+// ・数日かけて進める章（電験）は、完了していれば外すだけ
+// done: { taskKey: 'YYYY-MM-DD' }
+export function replanFrom(k, done = {}) {
+  const p = periodOf(k);
+  if (!p) return {};
+  const alloc = periodAllocation(p);
+  const days = daysOfPeriod(p).filter((d) => d >= k);
+  const out = Object.fromEntries(days.map((d) => [d, []]));
+  const doneBefore = (t) => done[t.key] && done[t.key] < k;
+  const streams = new Map();
+  for (const d of days) {
+    for (const t of alloc[d]) {
+      if (t.spanning) { if (!doneBefore(t)) out[d].push(t); continue; }
+      let st = streams.get(t.stream);
+      if (!st) streams.set(t.stream, (st = { items: [], quota: Object.fromEntries(days.map((x) => [x, 0])) }));
+      st.items.push(t);
+      st.quota[d]++;
+    }
+  }
+  for (const st of streams.values()) {
+    const rest = st.items.filter((t) => !doneBefore(t));
+    let i = 0;
+    for (const d of days) for (let n = 0; n < st.quota[d] && i < rest.length; n++) out[d].push(rest[i++]);
+  }
+  return out;
+}
+
+// その日の課題（先取りを反映した今日の割り当て＋教材以外の課題）
+export function dayTasks(k, done = {}) {
   const p = periodOf(k);
   const out = Object.fromEntries(SUBJECT_ORDER.map((s) => [s, []]));
   if (!p) return out;
-  for (const t of periodAllocation(p)[k] || []) out[t.subject].push(t);
+  for (const t of replanFrom(k, done)[k] || []) out[t.subject].push(t);
   for (const t of customTasks(p, k)) out[t.subject].push(t);
+  return out;
+}
+
+// 今週の残り（明日以降に割り当てられた項目）＝先取りできる課題
+export function aheadItems(k, done = {}) {
+  const plan = replanFrom(k, done);
+  const out = Object.fromEntries(SUBJECT_ORDER.map((s) => [s, []]));
+  const seen = new Set((plan[k] || []).map((t) => t.key));
+  for (const d of Object.keys(plan).sort()) {
+    if (d <= k) continue;
+    for (const t of plan[d]) if (!seen.has(t.key)) { seen.add(t.key); out[t.subject].push({ ...t, planned: d }); }
+  }
   return out;
 }
 
