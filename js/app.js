@@ -3,7 +3,7 @@ import {
   START, END, todayKey, addDays, diffDays, fmtDay, periodOf, periodByKey, PERIOD_KEYS, daysOfPeriod,
   plannedHours, dayTasks, earlierItems, periodItems, rangesOf, sumHours, fromKey,
 } from './plan.js';
-import { store, hoursByDay, lastMark } from './store.js';
+import { store, hoursByDay, lastMark, sync, initSync, syncNow, auth } from './store.js';
 import { pickTip } from './tips.js';
 
 const $ = (sel, el = document) => el.querySelector(sel);
@@ -356,10 +356,7 @@ function renderReview() {
 function renderSettings() {
   const theme = getTheme();
   return `
-    <section class="card">
-      <h2>データの保存先</h2>
-      <div style="font-size:14px">この端末（ブラウザ）に保存しています。Supabase に接続すると、スマホとPCで同期し、Claude から進捗を記録できるようになります（準備中）。</div>
-    </section>
+    ${renderAccount()}
     <section class="card">
       <h2>表示</h2>
       <div class="chips">
@@ -378,6 +375,39 @@ function renderSettings() {
       <button class="btn danger" data-reset>すべての記録を消去</button>
     </section>
     <div class="muted" style="font-size:12px;text-align:center">学習計画 v4（${fmtDay(START)}〜${fmtDay(END)}）・<a href="https://github.com/rolly634/study-planner" style="color:inherit">GitHub</a></div>`;
+}
+
+const STATUS_TEXT = {
+  local: '端末内に保存', connecting: '接続中…', signedout: '未ログイン（端末内に保存）', syncing: '同期中…',
+  ok: '同期済み', offline: 'オフライン', error: '同期エラー',
+};
+function renderAccount() {
+  const q = store.queueSize();
+  if (sync.email) {
+    return `<section class="card">
+      <h2>同期</h2>
+      <div style="font-size:14px"><b>${esc(sync.email)}</b> でログイン中</div>
+      <div class="muted" style="font-size:13px;margin:4px 0 8px">${STATUS_TEXT[sync.status] || ''}${sync.lastSync ? `・最終 ${hm(sync.lastSync)}` : ''}${q ? `・未送信 ${q}件` : ''}${sync.message ? `<br>${esc(sync.message)}` : ''}</div>
+      <div class="inline-form" style="margin-top:0">
+        <button class="btn" data-sync>今すぐ同期</button>
+        <button class="btn" data-signout>ログアウト</button>
+      </div>
+      <div class="muted" style="font-size:12px;margin-top:8px">スマホとPCで同じ記録を使えます。Claude アプリで話した進捗もここに反映されます。</div>
+    </section>`;
+  }
+  return `<section class="card">
+    <h2>ログインして同期</h2>
+    <div style="font-size:13px;color:var(--text-2);margin-bottom:8px">${sync.status === 'connecting' ? '接続中…' : sync.status === 'offline' ? esc(sync.message) : 'ログインすると、スマホとPCで記録を同期し、Claude から進捗を記録できます。今は端末内に保存しています。'}</div>
+    <form id="authForm" class="auth-form">
+      <input name="email" type="email" autocomplete="email" placeholder="メールアドレス" required>
+      <input name="password" type="password" autocomplete="current-password" placeholder="パスワード（6文字以上）" minlength="6" required>
+      <div class="inline-form" style="margin-top:0">
+        <button class="btn primary" type="submit" name="mode" value="in">ログイン</button>
+        <button class="btn" type="submit" name="mode" value="up">新規登録</button>
+      </div>
+      <div class="muted" id="authMsg" style="font-size:13px"></div>
+    </form>
+  </section>`;
 }
 
 function getTheme() { try { return localStorage.getItem('study-planner:theme') || 'auto'; } catch { return 'auto'; } }
@@ -442,6 +472,8 @@ document.addEventListener('click', (e) => {
   if (ds.filter) { view.reviewFilter = ds.filter; render(); return; }
   if (ds.themeSet) { try { localStorage.setItem('study-planner:theme', ds.themeSet); } catch {} applyTheme(ds.themeSet); render(); return; }
   if ('export' in ds) { download(); return; }
+  if ('sync' in ds) { syncNow(); return; }
+  if ('signout' in ds) { if (confirm('ログアウトしますか？（この端末の記録はそのまま残ります）')) auth.signOut(); return; }
   if ('reset' in ds) { if (confirm('すべての記録を消去します。よろしいですか？（元に戻せません）')) store.reset(); return; }
   // ダイアログ
   if (ds.mark) {
@@ -464,7 +496,25 @@ document.addEventListener('change', (e) => {
     });
   }
 });
-document.addEventListener('submit', (e) => {
+document.addEventListener('submit', async (e) => {
+  if (e.target.id === 'authForm') {
+    e.preventDefault();
+    const f = new FormData(e.target), msg = $('#authMsg');
+    const mode = e.submitter?.value || 'in';
+    if (!auth.ready()) { msg.textContent = 'サーバーにつながっていません'; return; }
+    msg.textContent = mode === 'up' ? '登録中…' : 'ログイン中…';
+    try {
+      if (mode === 'up') {
+        const needConfirm = await auth.signUp(f.get('email'), f.get('password'));
+        if (needConfirm) msg.textContent = '確認メールを送りました。メールのリンクを開いてから「ログイン」してください。';
+      } else {
+        await auth.signIn(f.get('email'), f.get('password'));
+      }
+    } catch (err) {
+      msg.textContent = (err.message || String(err)).includes('Invalid login') ? 'メールアドレスかパスワードが違います' : 'エラー：' + (err.message || err);
+    }
+    return;
+  }
   if (e.target.id !== 'manualForm') return;
   e.preventDefault();
   const f = new FormData(e.target);
@@ -502,13 +552,25 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState !== 'visible') return;
   store.reload();
   if (view.followToday) view.date = todayKey();
+  syncNow();
 });
+setInterval(() => { if (document.visibilityState === 'visible') syncNow(); }, 60000);
+window.addEventListener('online', () => syncNow());
 window.addEventListener('storage', (e) => { if (e.key === 'study-planner:v1') store.reload(); });
 
-store.subscribe(() => { render(); if ($('#markDlg').open && dlgCtx) renderMarkDlg(); });
+// 入力中は描き直さない（入力内容が消えないように）。入力が終わったら描き直す
+let pendingRender = false;
+function typing() { const a = document.activeElement; return a && $('#view').contains(a) && /^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName) && a.type !== 'checkbox'; }
+store.subscribe(() => {
+  if (typing()) { pendingRender = true; renderTimerbar(); return; }
+  render();
+  if ($('#markDlg').open && dlgCtx) renderMarkDlg();
+});
+document.addEventListener('focusout', () => setTimeout(() => { if (pendingRender && !typing()) { pendingRender = false; render(); } }, 0));
 
 applyTheme(getTheme());
 render();
+initSync();
 
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {
   navigator.serviceWorker.register('sw.js').catch(() => {});

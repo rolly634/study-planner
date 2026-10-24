@@ -1,10 +1,10 @@
 // オフラインでも開けるようにアプリのファイルをキャッシュする。
 // ファイルを更新したら VERSION を上げる。
-const VERSION = 'v1';
+const VERSION = 'v2';
 const CACHE = `study-planner-${VERSION}`;
 const FILES = [
   './', 'index.html', 'css/app.css', 'manifest.webmanifest',
-  'js/app.js', 'js/catalog.js', 'js/plan.js', 'js/store.js', 'js/tips.js',
+  'js/app.js', 'js/catalog.js', 'js/plan.js', 'js/store.js', 'js/tips.js', 'js/config.js',
   'icons/icon.svg', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png',
 ];
 self.addEventListener('install', (e) => {

@@ -18,7 +18,9 @@
 | `js/catalog.js` | 教材データ（教材目次集 v4 の章・問題・計画週） |
 | `js/plan.js` | 期間、時間配分、日ごとの課題の割り振り |
 | `js/tips.js` | 章ごとの TIPS |
-| `js/store.js` | データ保存（現在は端末内。Supabase 接続時に差し替え） |
+| `js/store.js` | データ保存と Supabase 同期（端末内に保存し、ログイン中は変更を送ってサーバーの内容を取り込む） |
+| `js/config.js` | Supabase の URL と公開用キー |
+| `supabase/` | テーブル定義と教材データ（items）の SQL |
 | `js/app.js` | 画面 |
 | `sw.js` | オフライン用キャッシュ（更新時は `VERSION` を上げる） |
 
@@ -28,7 +30,8 @@ python3 -m http.server 8000
 # http://localhost:8000 を開く
 ```
 
-## 今後
-- Supabase に接続して端末間で同期し、Claude アプリから進捗を記録できるようにする
+## 同期と Claude 連携
+- 設定タブでログインすると Supabase と同期する（スマホ・PC で同じ記録）。未ログインやオフラインでも端末内で使える
+- Claude アプリで話した進捗は、Supabase コネクタ経由で Claude がデータベースに書き込み、アプリにすぐ反映される。書き込み方は [docs/claude-reporting.md](docs/claude-reporting.md)
 
 要件は [docs/requirements.md](docs/requirements.md)。
