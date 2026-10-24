@@ -152,3 +152,15 @@ alter publication supabase_realtime add table public.mistake_links, public.attem
 
 -- v0.5.0（2026-10-24）：小問つき問題
 -- alter table public.attempts add column if not exists parts jsonb;
+
+-- v0.6.0（2026-10-25）：誤答アプリの「Claude に送る」（受信箱）。アプリが書き、Claude が毎晩 status・reply を書く
+-- create table public.inbox (
+--   id uuid primary key,
+--   user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+--   kind text not null default 'unsorted' check (kind in ('unsorted','fix','question','memo')),
+--   body text not null check (length(body) between 1 and 4000),
+--   target_type text check (target_type in ('problem','note')), target_id text, part text,
+--   status text not null default 'new' check (status in ('new','done','skipped')), reply text,
+--   sent_at timestamptz not null default now(), done_at timestamptz, created_at timestamptz not null default now()
+-- );
+-- RLS：本人だけ select・insert、未対応（status='new'）だけ delete
