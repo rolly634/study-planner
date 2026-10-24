@@ -54,6 +54,25 @@ function signed(h) { const v = Math.round(h * 10) / 10; return `${v > 0 ? '+' : 
 function pct(a, b) { return b > 0 ? Math.min(100, Math.round((a / b) * 100)) : 0; }
 function seedOf(k) { return Math.max(0, diffDays(START, k)); }
 
+// ── アプリとしてインストール ──
+let installEvt = null;
+const standalone = () => window.matchMedia?.('(display-mode: standalone)').matches || navigator.standalone === true;
+const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent);
+const INSTALL_HINT = () => (isIOS()
+  ? 'Safari の共有ボタン（□↑）→「ホーム画面に追加」でインストールできます。'
+  : 'ブラウザのメニュー（⋮）→「アプリをインストール」または「ホーム画面に追加」を選んでください。');
+window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installEvt = e; if (!typing()) render(); });
+window.addEventListener('appinstalled', () => { installEvt = null; if (!typing()) render(); });
+function renderInstall() {
+  if (standalone()) return '<section class="card"><h2>アプリとしてインストール</h2><div style="font-size:14px"><b>インストール済み</b>（ホーム画面から開いています）</div></section>';
+  return `<section class="card install-card">
+    <h2>アプリとしてインストール</h2>
+    <div class="muted" style="font-size:13px;margin-bottom:8px">ホーム画面にアイコンができ、ブラウザの枠なしで開けます。オフラインでも使えます。</div>
+    <button class="btn primary" data-install>📲 アプリとしてインストール</button>
+    <div class="muted install-hint" style="font-size:13px;margin-top:6px"></div>
+  </section>`;
+}
+
 // ── 描画 ──
 function render() {
   renderTopbar();
@@ -63,6 +82,8 @@ function render() {
   else if (view.tab === 'week') v.innerHTML = renderWeek();
   else if (view.tab === 'review') v.innerHTML = renderReview();
   else v.innerHTML = renderSettings();
+  // 今日の画面の下にも出す（ブラウザがインストールを受け付けるときだけ）
+  if (view.tab === 'today' && installEvt && !standalone()) v.insertAdjacentHTML('beforeend', renderInstall());
   document.querySelectorAll('#tabbar button').forEach((b) => b.classList.toggle('on', b.dataset.tab === view.tab));
 }
 
@@ -388,6 +409,7 @@ function renderSettings() {
   const theme = getTheme();
   return `
     ${renderAccount()}
+    ${renderInstall()}
     <section class="card">
       <h2>表示</h2>
       <div class="chips">
@@ -482,6 +504,17 @@ document.addEventListener('click', (e) => {
   const t = e.target.closest('button, [data-nav], [data-pnav]');
   if (!t) return;
   const ds = t.dataset;
+  if (ds.install !== undefined) {
+    if (installEvt) {
+      const ev = installEvt;
+      ev.prompt();
+      ev.userChoice?.then((r) => { if (r?.outcome === 'accepted') { installEvt = null; render(); } }).catch(() => {});
+    } else {
+      const h = t.parentElement.querySelector('.install-hint');
+      if (h) h.textContent = INSTALL_HINT();
+    }
+    return;
+  }
   if (ds.tab) { view.tab = ds.tab; window.scrollTo(0, 0); render(); return; }
   if (ds.nav) {
     if (ds.nav === 'today') { view.date = todayKey(); view.followToday = true; }
