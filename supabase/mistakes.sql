@@ -24,6 +24,7 @@ create table public.attempts (
   problem_id text not null,
   solved boolean not null,
   chosen int,
+  parts jsonb,  -- 小問つき問題：小問ごとに選んだ番号の配列（わからない＝null）。solved は全小問正解。v0.5.0 で追加
   at timestamptz not null,
   device text,
   created_at timestamptz not null default now()
@@ -147,3 +148,7 @@ create trigger sessions_review_achieved after insert or update on public.session
 for each row execute function public.on_review_session();
 
 alter publication supabase_realtime add table public.mistake_links, public.attempts, public.photo_dismissed, public.note_status, public.bookmarks;
+
+
+-- v0.5.0（2026-10-24）：小問つき問題
+-- alter table public.attempts add column if not exists parts jsonb;
