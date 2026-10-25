@@ -41,3 +41,5 @@ python3 -m http.server 8000
 - Claude アプリで話した進捗は、Supabase コネクタ経由で Claude がデータベースに書き込み、アプリにすぐ反映される。書き込み方は [docs/claude-reporting.md](docs/claude-reporting.md)
 
 要件は [docs/requirements.md](docs/requirements.md)。
+
+学習の進め方（理解すべき事柄と、学習段階に応じた勉強法）は [docs/learning-method.md](docs/learning-method.md)（Word 版：[docs/learning-method.docx](docs/learning-method.docx)）。
