@@ -13,4 +13,24 @@ select r.book||'-'||r.no, b.subject, r.book, b.book_name, r.no, r.title, r.chapt
       else r.title end,
  r.weeks
 from rows r join b using (book)
+on conflict (id) do update set subject=excluded.subject,book=excluded.book,book_name=excluded.book_name,no=excluded.no,title=excluded.title,chapter=excluded.chapter,label=excluded.label,weeks=excluded.weeks;insert into public.items (id,subject,book,book_name,no,title,chapter,label,weeks) values
+('JYU-1','math','JYU','実戦 数学重要問題集 数学I・II・III・A・B・C（理系）',1,'数と式（A問題）','数と式','重要問題集 1 数と式（A問題）','3'),
+('JYU-2','math','JYU','実戦 数学重要問題集 数学I・II・III・A・B・C（理系）',2,'関数と方程式・不等式（A問題）','関数と方程式・不等式','重要問題集 2 関数と方程式・不等式（A問題）','6'),
+('JYU-3','math','JYU','実戦 数学重要問題集 数学I・II・III・A・B・C（理系）',3,'式と証明（A問題）','式と証明','重要問題集 3 式と証明（A問題）','6'),
+('JYU-5','math','JYU','実戦 数学重要問題集 数学I・II・III・A・B・C（理系）',5,'場合の数・確率（A問題）','場合の数・確率','重要問題集 5 場合の数・確率（A問題）','8'),
+('JYU-6','math','JYU','実戦 数学重要問題集 数学I・II・III・A・B・C（理系）',6,'図形の性質（A問題）','図形の性質','重要問題集 6 図形の性質（A問題）','5'),
+('JYU-7','math','JYU','実戦 数学重要問題集 数学I・II・III・A・B・C（理系）',7,'図形と式（A問題）','図形と式','重要問題集 7 図形と式（A問題）','6'),
+('JYU-8','math','JYU','実戦 数学重要問題集 数学I・II・III・A・B・C（理系）',8,'三角比・三角関数（A問題）','三角比・三角関数','重要問題集 8 三角比・三角関数（A問題）','5'),
+('JYU-9','math','JYU','実戦 数学重要問題集 数学I・II・III・A・B・C（理系）',9,'指数関数・対数関数（A問題）','指数関数・対数関数','重要問題集 9 指数関数・対数関数（A問題）','7'),
+('JYU-10','math','JYU','実戦 数学重要問題集 数学I・II・III・A・B・C（理系）',10,'数列（A問題）','数列','重要問題集 10 数列（A問題）','9'),
+('JYU-11','math','JYU','実戦 数学重要問題集 数学I・II・III・A・B・C（理系）',11,'データの分析・統計的な推測（A問題）','データの分析・統計的な推測','重要問題集 11 データの分析・統計的な推測（A問題）','14'),
+('JYU-12','math','JYU','実戦 数学重要問題集 数学I・II・III・A・B・C（理系）',12,'ベクトル（A問題）','ベクトル','重要問題集 12 ベクトル（A問題）','13'),
+('JYU-13','math','JYU','実戦 数学重要問題集 数学I・II・III・A・B・C（理系）',13,'複素数平面（A問題）','複素数平面','重要問題集 13 複素数平面（A問題）','15'),
+('JYU-14','math','JYU','実戦 数学重要問題集 数学I・II・III・A・B・C（理系）',14,'式と曲線（A問題）','式と曲線','重要問題集 14 式と曲線（A問題）','12'),
+('JYU-15','math','JYU','実戦 数学重要問題集 数学I・II・III・A・B・C（理系）',15,'関数（A問題）','関数','重要問題集 15 関数（A問題）','9'),
+('JYU-16','math','JYU','実戦 数学重要問題集 数学I・II・III・A・B・C（理系）',16,'極限（A問題）','極限','重要問題集 16 極限（A問題）','9'),
+('JYU-17','math','JYU','実戦 数学重要問題集 数学I・II・III・A・B・C（理系）',17,'微分法（A問題）','微分法','重要問題集 17 微分法（A問題）','10'),
+('JYU-18','math','JYU','実戦 数学重要問題集 数学I・II・III・A・B・C（理系）',18,'微分法の応用（A問題）','微分法の応用','重要問題集 18 微分法の応用（A問題）','10'),
+('JYU-19','math','JYU','実戦 数学重要問題集 数学I・II・III・A・B・C（理系）',19,'積分法（A問題）','積分法','重要問題集 19 積分法（A問題）','11'),
+('JYU-20','math','JYU','実戦 数学重要問題集 数学I・II・III・A・B・C（理系）',20,'積分法の応用（A問題）','積分法の応用','重要問題集 20 積分法の応用（A問題）','12')
 on conflict (id) do update set subject=excluded.subject,book=excluded.book,book_name=excluded.book_name,no=excluded.no,title=excluded.title,chapter=excluded.chapter,label=excluded.label,weeks=excluded.weeks;

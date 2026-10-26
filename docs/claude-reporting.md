@@ -25,6 +25,7 @@ select id from auth.users order by created_at limit 1;
 |---|---|---|
 | 基礎問題精講 I・A / II・B / III・C | `KIA` / `KIIB` / `KIIIC` | 基礎問IIB 55 → `KIIB-55` |
 | 合格る計算 I・A・II・B / III・C | `GO1` / `GO3` | 合格る 48 → `GO1-48` |
+| 実戦 数学重要問題集（理系） | `JYU` | 章ごとに1項目（A問題）。重要問題集 第8章 → `JYU-8`（第4章 整数は範囲外でなし） |
 | 物理のエッセンス 力学・波動 / 熱・電磁気・原子 | `ESS1` / `ESS2` | 節名で検索 |
 | 良問の風 | `RYO` | 「力学3」などで検索 |
 | 速読英単語 | `SOK` | 速単 3 → `SOK-3` |
@@ -88,7 +89,7 @@ select label, mark, marked_on from (
   order by m.item_id, m.created_at desc
 ) last where mark <> 'o';
 ```
-計画の時間配分（週51h）：平日 数学2h・物理1.5h・電験2h・復習0.5h／土 数学4.5h・物理4h・英語2h・電験1h・復習0.5h／日 数学3.5h・物理3h・英語2h・復習0.5h。
+計画の時間配分（週51h）：平日 数学2h・物理1.5h・電験2h・復習0.5h／土 数学4.5h・物理4h・英語2h・電験1h・復習0.5h／日 数学3.5h・物理3h・英語2h・復習0.5h。重要問題集のある週（W3・W5〜W15）は土日の数学に各1.5hを足す（週54h）。
 
 
 ## 誤答アプリとの連携（参考）

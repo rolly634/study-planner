@@ -1,5 +1,5 @@
 // 学習計画 v4 の期間・時間配分・日ごとの割り振り
-import { itemsForPeriod, SUBJECT_ORDER } from './catalog.js';
+import { itemsForPeriod, SUBJECT_ORDER, CHAPTERS } from './catalog.js';
 
 export const START = '2026-10-24';
 export const END = '2027-03-21';
@@ -73,7 +73,12 @@ export const WEEK_RANGES = [
 ];
 export function rangesOf(p) {
   if (!p) return {};
-  if (typeof p.key === 'number') return WEEK_RANGES[p.key - 1];
+  if (typeof p.key === 'number') {
+    const r = { ...WEEK_RANGES[p.key - 1] };
+    const juyo = CHAPTERS.filter((ch) => ch.stream === 'juyo' && ch.weeks.includes(p.key)).sort((a, b) => a.items[0].no - b.items[0].no);
+    if (juyo.length) r.math += `／重要問題集 A：${juyo.map((ch) => `${ch.items[0].no} ${ch.name}`).join('・')}（土日）`;
+    return r;
+  }
   if (p.key === 'D1') return { denken: '機械04 同期機 62–84・05 パワーエレクトロニクス 85–103・06 自動制御 104–113・07 情報 114–122・08 照明 123–128・09 電熱 129–137・10 電動機応用 138–146・11 電気化学 147–157' };
   if (p.key === 'D2') return { denken: '法規01 電気事業法 1–15・02 その他の電気関係法規 16–20・03 電気設備の技術基準・解釈 21–43・04 電気設備技術基準（計算） 44–66・05 風力・太陽電池発電の技術基準 67–69・06 電気施設管理 70–103・×△の解き直し' };
   if (p.key === 'D3') return { denken: '4科目の過去問1年分ずつ' };
@@ -88,12 +93,21 @@ const HOURS = {
   denkenOnly: { math: 0, physics: 0, english: 0, denken: 7, review: 0.5 },
   none:    { math: 0, physics: 0, english: 0, denken: 0, review: 0 },
 };
+// 重要問題集のある週は、土日の数学に追加する
+export const JUYO_EXTRA = 1.5;
+const JUYO_WEEKS = new Set(CHAPTERS.filter((ch) => ch.stream === 'juyo').flatMap((ch) => ch.weeks));
+export function juyoExtra(k) {
+  const p = periodOf(k), wd = weekdayOf(k);
+  return p && JUYO_WEEKS.has(p.key) && (wd === 6 || wd === 0) ? JUYO_EXTRA : 0;
+}
 export function plannedHours(k) {
   const p = periodOf(k);
   if (!p || p.key === 'EXAM1' || p.key === 'EXAM2') return { ...HOURS.none };
   if (typeof p.key === 'string') return { ...HOURS.denkenOnly };
   const wd = weekdayOf(k);
-  return { ...(wd === 6 ? HOURS.sat : wd === 0 ? HOURS.sun : HOURS.weekday) };
+  const h = { ...(wd === 6 ? HOURS.sat : wd === 0 ? HOURS.sun : HOURS.weekday) };
+  h.math += juyoExtra(k);
+  return h;
 }
 
 // ── 計画にある「教材以外」の課題 ──
@@ -172,8 +186,10 @@ export function periodAllocation(p) {
     });
   };
   // 数学：基礎問は全日、合格るは2〜3日後（月〜金）
-  put(by('kiso'), hrs.map((h) => h.math));
+  put(by('kiso'), hrs.map((h, i) => h.math - juyoExtra(days[i])));
   put(by('gokaku'), hrs.map((h, i) => (wd[i] !== 6 && wd[i] !== 0 ? h.math : 0)));
+  // 重要問題集：章（A問題）を土日にまたがって割り振る
+  put(by('juyo'), wd.map((d) => (d === 6 || d === 0 ? 1 : 0)), true);
   // 物理：W1〜W10 はエッセンスを土日、良問の風を月〜水。W11以降は全日
   if (w >= 1 && w <= 10) {
     put(by('essence'), wd.map((d) => (d === 6 || d === 0 ? 1 : 0)));
